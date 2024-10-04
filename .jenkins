@@ -1,0 +1,119 @@
+pipeline {
+    agent any
+    environment {
+        // Secrets stored in Jenkins Credentials
+        DATABASE_PASSWORD = credentials('DATABASE_PASSWORD')
+        CLERK_SECRET_KEY = credentials('CLERK_SECRET_KEY')
+        STRIPE_SECRET_KEY = credentials('STRIPE_SECRET_KEY')
+        OPENAI_API_KEY = credentials('OPENAI_API_KEY')
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = credentials('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY')
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = credentials('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY')
+        NEXT_PUBLIC_CLERK_SIGN_IN_URL = credentials('NEXT_PUBLIC_CLERK_SIGN_IN_URL')
+        NEXT_PUBLIC_CLERK_SIGN_UP_URL = credentials('NEXT_PUBLIC_CLERK_SIGN_UP_URL')
+        CLERK_WEBHOOK_SECRET = credentials('CLERK_WEBHOOK_SECRET')
+
+        // Minikube-specific
+        KUBECONFIG = "~/.kube/config"
+        MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
+
+    }
+    stages {
+        stage('Setup LocalStack and Minikube') {
+            steps {
+                sh './scripts/setup.sh'  // This ensures LocalStack and Minikube are running
+            }
+        }
+
+        stage('Checkout Code') {
+            steps {
+                script {
+                    // Ensure all sub-repositories are updated
+                    sh 'meta git update'
+                }
+            }
+        }
+
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Webapp') {
+                    steps {
+                        dir('webapp') {
+                            sh """
+                            docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
+                                          --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
+                                          --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
+                                          --build-arg OPENAI_API_KEY=${OPENAI_API_KEY} \
+                                          --build-arg NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=${NEXT_PUBLIC_WEBAPP_URL} \
+                                          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
+                                          --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
+                                          --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
+                                          --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
+                                          -t webapp-tale-compendium:latest -f Dockerfile .
+                            """
+                        }
+                    }
+                }
+                stage('Build API') {
+                    steps {
+                        dir('api') {
+                            sh """
+                            docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
+                                          --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
+                                          --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
+                                          --build-arg OPENAI_API_KEY=${OPENAI_API_KEY} \
+                                          --build-arg NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} \
+                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=${NEXT_PUBLIC_WEBAPP_URL} \
+                                          --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
+                                          --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
+                                          --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
+                                          --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
+                                          -t api-tale-compendium:latest -f Dockerfile .
+                            """
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Load Images into Minikube') {
+            steps {
+                script {
+                    // After building the images, load them into Minikube
+                    sh 'minikube image load webapp-tale-compendium:latest'
+                    sh 'minikube image load api-tale-compendium:latest'
+                }
+            }
+        }
+
+        stage('Push Images to LocalStack S3') {  // New stage for pushing to LocalStack
+            steps {
+                sh 'aws --endpoint-url=http://localhost:4566 s3 mb s3://my-bucket'  // Example: Simulate S3
+            }
+        }
+
+        stage('Deploy with Terraform') {
+            steps {
+                dir('terraform/local') {
+                    sh '''
+                    terraform init
+                    terraform apply -auto-approve -var="minikube_ip=${MINIKUBE_IP}"
+                    '''
+                }
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'echo "Running tests..."'
+                // Add test commands here
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                sh 'docker image prune -f'
+            }
+        }
+    }
+}
