@@ -1,0 +1,7 @@
+{
+  "projects": {
+    "webapp": "git@github.com:NickThompsonDev/webapp-tale-compendium.git",
+    "api": "git@github.com:NickThompsonDev/api-tale-compendium.git",
+    "terraform": "git@github.com:NickThompsonDev/terraform-tale-compendium.git"
+  }
+}
