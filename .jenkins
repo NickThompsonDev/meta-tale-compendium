@@ -14,14 +14,14 @@ pipeline {
 
         // Minikube-specific
         KUBECONFIG = "~/.kube/config"
-        MINIKUBE_VERSION = 'v1.34.0'
+        MINIKUBE_VERSION = 'v1.34.0' // You can change this based on your version preference
         MINIKUBE_IP = ""
     }
 
     stages {
         stage('Checkout Meta Repo') {
             steps {
-                // Checkout the main meta repository
+                // Check out the meta repository, don't use submodules
                 checkout([$class: 'GitSCM', branches: [[name: '*/main']],
                     userRemoteConfigs: [[url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git']]
                 ])
@@ -31,7 +31,7 @@ pipeline {
         stage('Update Sub-Repositories') {
             steps {
                 script {
-                    // Update all sub-repositories using the meta git command
+                    // Ensure meta and sub-repositories are updated
                     sh 'meta git update'
                 }
             }
@@ -44,7 +44,7 @@ pipeline {
                     sh '''
                     if ! command -v docker &> /dev/null
                     then
-                      echo "Docker not found, ensure it's installed."
+                      echo "Docker not found, installing..."
                       exit 1
                     else
                       echo "Docker is already installed."
