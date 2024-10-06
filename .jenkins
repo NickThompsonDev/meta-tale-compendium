@@ -17,6 +17,14 @@ pipeline {
         MINIKUBE_IP = ""
     }
     stages {
+        stage('Verify Docker Access') {
+            steps {
+                script {
+                    sh 'docker ps'
+                }
+            }
+        }
+        
         stage('Ensure Minikube is Running') {
             steps {
                 script {
