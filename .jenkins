@@ -17,14 +17,20 @@ pipeline {
         MINIKUBE_IP = ""
     }
     stages {
-
-        stage('Start Minikube') {
+        stage('Ensure Minikube is Running') {
             steps {
                 script {
-                    // Start Minikube if it's not running and get its IP
-                    sh 'minikube start --driver=docker'
-                    MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
-                    echo "Minikube IP is ${MINIKUBE_IP}"
+                    // Check if Minikube container is running, start if it's not
+                    sh """
+                    if [ $(docker ps -q -f name=minikube-container) ]; then
+                        echo "Minikube is already running."
+                    else
+                        echo "Starting Minikube..."
+                        docker start minikube
+                    fi
+                    MINIKUBE_IP=\$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' minikube)
+                    echo "Minikube IP: \${MINIKUBE_IP}"
+                    """
                 }
             }
         }
