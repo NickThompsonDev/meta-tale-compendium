@@ -19,16 +19,15 @@ pipeline {
     }
 
     stages {
-        stage('Checkout Meta Repository') {
+        stage('Clone Meta Repository') {
             steps {
                 script {
-                    // Check out the main meta repository
-                    checkout([$class: 'GitSCM', branches: [[name: '*/main']],
-                        userRemoteConfigs: [[url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git']]
-                    ])
-
-                    // Run the meta command to fetch submodules or sub-repositories
-                    sh 'meta git update'
+                    // Manually clone the meta repository and run meta git update
+                    sh '''
+                    git clone https://github.com/NickThompsonDev/meta-tale-compendium.git
+                    cd meta-tale-compendium
+                    meta git update
+                    '''
                 }
             }
         }
@@ -106,6 +105,7 @@ pipeline {
         stage('Load Docker Images into Minikube') {
             steps {
                 script {
+                    // Load the Docker images into Minikube
                     sh 'minikube image load webapp-tale-compendium:latest'
                     sh 'minikube image load api-tale-compendium:latest'
                 }
