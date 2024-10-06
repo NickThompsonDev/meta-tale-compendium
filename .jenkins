@@ -14,19 +14,26 @@ pipeline {
 
         // Minikube-specific
         KUBECONFIG = "~/.kube/config"
-        MINIKUBE_VERSION = 'v1.34.0' // Adjust Minikube version as needed
+        MINIKUBE_VERSION = 'v1.34.0'
         MINIKUBE_IP = ""
     }
 
     stages {
-        stage('Checkout Code') {
+        stage('Checkout Meta Repo') {
             steps {
-                // Properly check out the Git repository
-                checkout([$class: 'GitSCM',
-                    branches: [[name: '*/main']],  // Adjust branch as needed
-                    extensions: [],
+                // Checkout the main meta repository
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']],
                     userRemoteConfigs: [[url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git']]
                 ])
+            }
+        }
+
+        stage('Update Sub-Repositories') {
+            steps {
+                script {
+                    // Update all sub-repositories using the meta git command
+                    sh 'meta git update'
+                }
             }
         }
 
