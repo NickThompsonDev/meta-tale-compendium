@@ -21,31 +21,24 @@ pipeline {
     stages {
         stage('Checkout Code') {
             steps {
-                script {
-                    // Ensure all sub-repositories are updated
-                    checkout([$class: 'GitSCM',
-                        branches: [[name: '*/main']], // Adjust branch name (e.g., '*/master' or other branch)
-                        doGenerateSubmoduleConfigurations: false,
-                        extensions: [],
-                        userRemoteConfigs: [[
-                            url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git', // Adjust repo URL if needed
-                            // credentialsId: 'your-git-credentials-id'  // Uncomment and set this if it's a private repo
-                        ]]
-                    ])
-                }
+                // Properly check out the Git repository
+                checkout([$class: 'GitSCM',
+                    branches: [[name: '*/main']],  // Adjust branch as needed
+                    extensions: [],
+                    userRemoteConfigs: [[url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git']]
+                ])
             }
         }
 
         stage('Install Docker') {
             steps {
                 script {
-                    // Check if Docker is installed, and install it if necessary
+                    // Ensure Docker is installed
                     sh '''
                     if ! command -v docker &> /dev/null
                     then
-                      echo "Docker not found, installing..."
-                      apt-get update
-                      apt-get install -y docker.io
+                      echo "Docker not found, ensure it's installed."
+                      exit 1
                     else
                       echo "Docker is already installed."
                     fi
@@ -57,7 +50,7 @@ pipeline {
         stage('Start Minikube') {
             steps {
                 script {
-                    // Start Minikube if it's not running and get its IP
+                    // Start Minikube and get its IP
                     sh '''
                     if ! docker ps | grep -q minikube-container; then
                         echo "Starting Minikube container..."
