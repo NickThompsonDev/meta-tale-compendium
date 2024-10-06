@@ -24,7 +24,9 @@ pipeline {
                 script {
                     // Manually clone the meta repository and run meta git update
                     sh '''
-                    git clone https://github.com/NickThompsonDev/meta-tale-compendium.git
+                    if [ ! -d "meta-tale-compendium" ]; then
+                      git clone https://github.com/NickThompsonDev/meta-tale-compendium.git
+                    fi
                     cd meta-tale-compendium
                     meta git update
                     '''
