@@ -14,53 +14,16 @@ pipeline {
 
         // Minikube-specific
         KUBECONFIG = "~/.kube/config"
-        MINIKUBE_VERSION = 'v1.34.0'
         MINIKUBE_IP = ""
     }
     stages {
-        stage('Check and Install Docker') {
+
+        stage('Start Minikube') {
             steps {
                 script {
-                    // Install Docker if it's not installed
-                    if (isUnix()) {
-                        sh '''
-                        if ! command -v docker &> /dev/null
-                        then
-                          echo "Docker not found, installing..."
-                          apt-get update && apt-get install -y \
-                              apt-transport-https \
-                              ca-certificates \
-                              curl \
-                              gnupg2 \
-                              software-properties-common
-
-                          curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
-                          add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian $(lsb_release -cs) stable"
-                          apt-get update && apt-get install -y docker-ce-cli
-                        else
-                          echo "Docker is already installed."
-                        fi
-                        '''
-                    } else {
-                        echo "Docker installation is only supported on Unix in this pipeline"
-                    }
-                }
-            }
-        }
-
-        stage('Start Minikube Container') {
-            steps {
-                script {
-                    // Start Minikube container if it's not running
-                    sh '''
-                    if ! docker ps | grep -q minikube-container; then
-                        docker run -d --name=minikube-container --privileged -p 127.0.0.1:8443:8443 -v /var/lib/minikube:/var/lib/minikube -v /var/run/docker.sock:/var/run/docker.sock gcr.io/k8s-minikube/minikube-amd64:v1.34.0
-                    else
-                        echo "Minikube container already running."
-                    fi
-                    '''
-                    // Get Minikube IP
-                    MINIKUBE_IP = sh(script: 'docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" minikube-container', returnStdout: true).trim()
+                    // Start Minikube if it's not running and get its IP
+                    sh 'minikube start --driver=docker'
+                    MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
                     echo "Minikube IP is ${MINIKUBE_IP}"
                 }
             }
@@ -80,7 +43,7 @@ pipeline {
                 stage('Build Webapp') {
                     steps {
                         dir('webapp') {
-                            sh '''
+                            sh """
                             docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
@@ -92,14 +55,14 @@ pipeline {
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
                                           -t webapp-tale-compendium:latest -f Dockerfile .
-                            '''
+                            """
                         }
                     }
                 }
                 stage('Build API') {
                     steps {
                         dir('api') {
-                            sh '''
+                            sh """
                             docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
@@ -111,7 +74,7 @@ pipeline {
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
                                           -t api-tale-compendium:latest -f Dockerfile .
-                            '''
+                            """
                         }
                     }
                 }
