@@ -14,40 +14,64 @@ pipeline {
 
         // Minikube-specific
         KUBECONFIG = "~/.kube/config"
+        MINIKUBE_VERSION = 'v1.34.0' // Adjust Minikube version as needed
         MINIKUBE_IP = ""
     }
+
     stages {
-        stage('Verify Docker Access') {
+        stage('Checkout Code') {
             steps {
                 script {
-                    sh 'docker ps'
+                    // Ensure all sub-repositories are updated
+                    checkout([$class: 'GitSCM',
+                        branches: [[name: '*/main']], // Adjust branch name (e.g., '*/master' or other branch)
+                        doGenerateSubmoduleConfigurations: false,
+                        extensions: [],
+                        userRemoteConfigs: [[
+                            url: 'https://github.com/NickThompsonDev/meta-tale-compendium.git', // Adjust repo URL if needed
+                            // credentialsId: 'your-git-credentials-id'  // Uncomment and set this if it's a private repo
+                        ]]
+                    ])
                 }
             }
         }
-        
-        stage('Ensure Minikube is Running') {
+
+        stage('Install Docker') {
             steps {
                 script {
-                    // Check if Minikube container is running, start if it's not
+                    // Check if Docker is installed, and install it if necessary
                     sh '''
-                    if [ $(docker ps -q -f name=minikube-container) ]; then
-                        echo "Minikube is already running."
+                    if ! command -v docker &> /dev/null
+                    then
+                      echo "Docker not found, installing..."
+                      apt-get update
+                      apt-get install -y docker.io
                     else
-                        echo "Starting Minikube..."
-                        docker start minikube
+                      echo "Docker is already installed."
                     fi
-                    MINIKUBE_IP=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}' minikube)
-                    echo "Minikube IP: ${MINIKUBE_IP}"
                     '''
                 }
             }
         }
 
-        stage('Checkout Code') {
+        stage('Start Minikube') {
             steps {
                 script {
-                    // Ensure all sub-repositories are updated
-                    sh 'meta git update'
+                    // Start Minikube if it's not running and get its IP
+                    sh '''
+                    if ! docker ps | grep -q minikube-container; then
+                        echo "Starting Minikube container..."
+                        docker run -d --name=minikube-container --privileged \
+                          -p 127.0.0.1:8443:8443 \
+                          -v /var/lib/minikube:/var/lib/minikube \
+                          -v /var/run/docker.sock:/var/run/docker.sock \
+                          gcr.io/k8s-minikube/minikube-amd64:${MINIKUBE_VERSION}
+                    else
+                        echo "Minikube is already running."
+                    fi
+                    '''
+                    MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
+                    echo "Minikube IP is ${MINIKUBE_IP}"
                 }
             }
         }
