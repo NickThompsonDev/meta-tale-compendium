@@ -13,41 +13,22 @@ pipeline {
         CLERK_WEBHOOK_SECRET = credentials('CLERK_WEBHOOK_SECRET')
 
         // Minikube-specific
-        KUBECONFIG = "~/.kube/config"
-        MINIKUBE_VERSION = 'v1.34.0' // You can change this based on your version preference
-        MINIKUBE_IP = ""
+        MINIKUBE_IP = ""  // We will retrieve this in the Start Minikube stage
     }
     stages {
-        stage('Install Minikube if Needed') {
+        stage('Start Minikube Container') {
             steps {
                 script {
-                    // Install Minikube if it's not installed
-                    if (isUnix()) {
-                        sh """
-                        if ! command -v minikube &> /dev/null
-                        then
-                          echo "Minikube not found, installing..."
-                          curl -LO https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64
-                          install minikube-linux-amd64 /usr/local/bin/minikube
-                        else
-                          echo "Minikube is already installed."
-                        fi
-                        """
-                    } else {
-                        bat """
-                        where minikube || (echo Minikube not found, installing... && curl -LO https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-windows-amd64.exe && move minikube-windows-amd64.exe minikube.exe && install minikube.exe C:\\ProgramData\\minikube\\)
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Start Minikube') {
-            steps {
-                script {
-                    // Start Minikube if it's not running and get its IP
-                    sh 'minikube start --driver=docker'
-                    MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
+                    // Start Minikube container if it's not running
+                    sh """
+                    if ! docker ps | grep -q minikube-container; then
+                        docker run -d --name=minikube-container --privileged -p 127.0.0.1:8443:8443 -v /var/lib/minikube:/var/lib/minikube -v /var/run/docker.sock:/var/run/docker.sock gcr.io/k8s-minikube/minikube-amd64:v1.34.0
+                    else
+                        echo "Minikube container already running."
+                    fi
+                    """
+                    // Get Minikube IP
+                    MINIKUBE_IP = sh(script: 'docker inspect -f "{{range.NetworkSettings.Networks}}{{.IPAddress}}{{end}}" minikube-container', returnStdout: true).trim()
                     echo "Minikube IP is ${MINIKUBE_IP}"
                 }
             }
@@ -72,8 +53,8 @@ pipeline {
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
                                           --build-arg OPENAI_API_KEY=${OPENAI_API_KEY} \
-                                          --build-arg NEXT_PUBLIC_API_URL=http://${MINIKUBE_IP}/api \
-                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=http://${MINIKUBE_IP} \
+                                          --build-arg NEXT_PUBLIC_API_URL=http://${MINIKUBE_IP}:3000/api \
+                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=http://${MINIKUBE_IP}:3000 \
                                           --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
@@ -91,8 +72,8 @@ pipeline {
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
                                           --build-arg OPENAI_API_KEY=${OPENAI_API_KEY} \
-                                          --build-arg NEXT_PUBLIC_API_URL=http://${MINIKUBE_IP}/api \
-                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=http://${MINIKUBE_IP} \
+                                          --build-arg NEXT_PUBLIC_API_URL=http://${MINIKUBE_IP}:3000/api \
+                                          --build-arg NEXT_PUBLIC_WEBAPP_URL=http://${MINIKUBE_IP}:3000 \
                                           --build-arg NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
