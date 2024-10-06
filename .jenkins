@@ -28,7 +28,7 @@ pipeline {
                         then
                           echo "Minikube not found, installing..."
                           curl -LO https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64
-                          sudo install minikube-linux-amd64 /usr/local/bin/minikube
+                          install minikube-linux-amd64 /usr/local/bin/minikube
                         else
                           echo "Minikube is already installed."
                         fi
@@ -50,12 +50,6 @@ pipeline {
                     MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
                     echo "Minikube IP is ${MINIKUBE_IP}"
                 }
-            }
-        }
-
-        stage('Setup LocalStack and Minikube') {
-            steps {
-                sh './scripts/setup.sh'  // Ensure any setup is done
             }
         }
 
