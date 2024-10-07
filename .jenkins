@@ -19,21 +19,6 @@ pipeline {
     }
 
     stages {
-        stage('Clone Meta Repository') {
-            steps {
-                script {
-                    // Manually clone the meta repository and run meta git update
-                    sh '''
-                    if [ ! -d "meta-tale-compendium" ]; then
-                      git clone https://github.com/NickThompsonDev/meta-tale-compendium.git
-                    fi
-                    cd meta-tale-compendium
-                    meta git update
-                    '''
-                }
-            }
-        }
-
         stage('Install Minikube if Needed') {
             steps {
                 script {
@@ -56,6 +41,14 @@ pipeline {
                     sh 'minikube start --driver=docker'
                     MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
                     echo "Minikube IP is ${MINIKUBE_IP}"
+                }
+            }
+        }
+
+        stage('meta git pull') {
+            steps{
+                script{
+                    sh 'meta git pull'
                 }
             }
         }
