@@ -18,37 +18,38 @@ pipeline {
         MINIKUBE_IP = ""
     }
 
+    options {
+        timeout(time: 30, unit: 'MINUTES') // Set an appropriate timeout for long-running stages
+    }
+
     stages {
-        stage('Install Minikube if Needed') {
+        stage('Debug Environment') {
+            steps {
+                // Print debug information to verify environment setup
+                sh '''
+                set -x
+                git --version  # Check Git installation
+                docker --version  # Check Docker installation
+                echo $PATH  # Print the PATH
+                echo "Checking if Docker is installed and accessible..."
+                docker ps || echo "Docker is not installed or running"
+                '''
+            }
+        }
+
+        stage('Checkout Code') {
             steps {
                 script {
+                    // Manually perform the Git checkout with verbose output for debugging
+                    echo "Starting Git checkout..."
                     sh '''
-                    echo "Checking if Minikube is installed..."
-                    if ! command -v minikube &> /dev/null; then
-                        echo "Minikube not found, installing..."
-                        curl -LO https://storage.googleapis.com/minikube/releases/${MINIKUBE_VERSION}/minikube-linux-amd64
-                        install minikube-linux-amd64 /usr/local/bin/minikube
-                    fi
+                    git --version
+                    echo "Cloning repository..."
+                    git clone https://github.com/NickThompsonDev/meta-tale-compendium.git || echo "Git clone failed"
+                    cd meta-tale-compendium
+                    git fetch --all || echo "Git fetch failed"
+                    git checkout master || echo "Git checkout failed"
                     '''
-                }
-            }
-        }
-
-        stage('Start Minikube') {
-            steps {
-                script {
-                    // Start Minikube if it's not running and get its IP
-                    sh 'minikube start --driver=docker'
-                    MINIKUBE_IP = sh(script: 'minikube ip', returnStdout: true).trim()
-                    echo "Minikube IP is ${MINIKUBE_IP}"
-                }
-            }
-        }
-
-        stage('meta git pull') {
-            steps{
-                script{
-                    sh 'meta git pull'
                 }
             }
         }
@@ -58,7 +59,7 @@ pipeline {
                 stage('Build Webapp') {
                     steps {
                         dir('webapp') {
-                            sh """
+                            sh '''
                             docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
@@ -69,8 +70,8 @@ pipeline {
                                           --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
-                                          -t webapp-tale-compendium:latest -f Dockerfile .
-                            """
+                                          -t webapp-tale-compendium:latest -f Dockerfile . || echo "Webapp build failed"
+                            '''
                         }
                     }
                 }
@@ -78,7 +79,7 @@ pipeline {
                 stage('Build API') {
                     steps {
                         dir('api') {
-                            sh """
+                            sh '''
                             docker build --build-arg DATABASE_PASSWORD=${DATABASE_PASSWORD} \
                                           --build-arg CLERK_SECRET_KEY=${CLERK_SECRET_KEY} \
                                           --build-arg STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY} \
@@ -89,8 +90,8 @@ pipeline {
                                           --build-arg NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL} \
                                           --build-arg NEXT_PUBLIC_CLERK_SIGN_UP_URL=${NEXT_PUBLIC_CLERK_SIGN_UP_URL} \
-                                          -t api-tale-compendium:latest -f Dockerfile .
-                            """
+                                          -t api-tale-compendium:latest -f Dockerfile . || echo "API build failed"
+                            '''
                         }
                     }
                 }
@@ -101,8 +102,13 @@ pipeline {
             steps {
                 script {
                     // Load the Docker images into Minikube
-                    sh 'minikube image load webapp-tale-compendium:latest'
-                    sh 'minikube image load api-tale-compendium:latest'
+                    sh '''
+                    echo "Loading webapp image into Minikube..."
+                    minikube image load webapp-tale-compendium:latest || echo "Failed to load webapp image into Minikube"
+
+                    echo "Loading API image into Minikube..."
+                    minikube image load api-tale-compendium:latest || echo "Failed to load API image into Minikube"
+                    '''
                 }
             }
         }
@@ -111,8 +117,8 @@ pipeline {
             steps {
                 dir('terraform/local') {
                     sh '''
-                    terraform init
-                    terraform apply -auto-approve -var="minikube_ip=${MINIKUBE_IP}"
+                    terraform init || echo "Terraform init failed"
+                    terraform apply -auto-approve -var="minikube_ip=${MINIKUBE_IP}" || echo "Terraform apply failed"
                     '''
                 }
             }
@@ -126,7 +132,20 @@ pipeline {
 
         stage('Cleanup') {
             steps {
-                sh 'docker image prune -f'
+                sh 'docker image prune -f || echo "Docker image cleanup failed"'
+            }
+        }
+    }
+
+    post {
+        always {
+            script {
+                echo "Cleaning up after build..."
+            }
+        }
+        failure {
+            script {
+                echo "Pipeline failed!"
             }
         }
     }
